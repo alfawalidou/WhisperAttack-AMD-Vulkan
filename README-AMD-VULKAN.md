@@ -57,6 +57,22 @@ The release ZIP should include:
 
 The Git repository does not include whisper.cpp binaries or models because they are large generated/runtime files.
 
+## Dependencies
+
+This AMD/Vulkan release does not require CUDA, PyTorch, faster-whisper, CTranslate2, or NVIDIA runtime libraries.
+
+The prebuilt release uses:
+
+- whisper.cpp
+- Vulkan
+- AMD-compatible GPU runtime
+
+For reference, the original CUDA/NVIDIA dependency list is kept in:
+
+```text
+requirements-original-cuda.txt
+```
+
 ## Credits
 
 Based on the original WhisperAttack project by nikoelt:
