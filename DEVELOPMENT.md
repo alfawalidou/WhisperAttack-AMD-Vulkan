@@ -58,7 +58,7 @@ Server started and listening on 127.0.0.1:65432
 Logs are written to:
 
 ```text
-C:\Users\username\AppData\Local\WhisperAttack\WhisperAttack.log
+%LOCALAPPDATA%\WhisperAttack\WhisperAttack.log
 ```
 
 ## VoiceAttack Protocol

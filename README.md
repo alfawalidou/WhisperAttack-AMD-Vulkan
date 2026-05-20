@@ -39,7 +39,7 @@ The Git repository does not include large binaries or models. They are provided 
 Default configuration lives in `settings.cfg` beside the application. User overrides can be placed in:
 
 ```text
-C:\Users\username\AppData\Local\WhisperAttack
+%LOCALAPPDATA%\WhisperAttack
 ```
 
 Clean AMD/Vulkan configuration:
@@ -66,7 +66,7 @@ From a release package, run `WhisperAttack.exe`.
 From source:
 
 ```powershell
-cd F:\ED-backup-binding\WhisperAttack_vulkan\WhisperAttack
+cd C:\Path\To\WhisperAttack-AMD-Vulkan
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
