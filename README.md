@@ -70,6 +70,8 @@ The default values should cover most cases but can be changed:
 
 - `whisper_model` - The Whisper model to use, `small.en` by default. See the table at the bottom of the README file for options.
   - A smaller size can be specified for reducing the amount of VRAM used, e.g. `base.en` or `tiny.en`
+- `whisper_backend` - Which Whisper backend to use, `faster_whisper` (default) or `whisper_cpp_vulkan`
+  - When set to `whisper_cpp_vulkan`, WhisperAttack runs `whisper_cpp\whisper-cli.exe` with `whisper_cpp\models\ggml-base.en.bin`
 - `whisper_device` - Which device to run the Whisper transcription process on, `GPU` (default) or `CPU`
 - `theme` - To display the WhisperAttack UI in light or dark mode. Valid values: 
   - `default` - this will use the current theme you have set for Windows

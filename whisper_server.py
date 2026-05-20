@@ -1,5 +1,6 @@
 import os
 import socket
+import subprocess
 import time
 import logging
 import unicodedata
@@ -24,6 +25,8 @@ from theme import TAG_BLUE, TAG_GREEN, TAG_GREY, TAG_ORANGE, TAG_RED
 ###############################################################################
 HOST = '127.0.0.1'
 PORT = 65432
+BACKEND_FASTER_WHISPER = "faster_whisper"
+BACKEND_WHISPER_CPP_VULKAN = "whisper_cpp_vulkan"
 
 # Library to convert textual numbers to their numerical values
 t2d = text2digits.Text2Digits()
@@ -192,6 +195,9 @@ class WhisperServer:
         self.exit_event = exit_event
         self.shutdown = shutdown
         self.model = None
+        self.whisper_backend = BACKEND_FASTER_WHISPER
+        self.whisper_cpp_exe = None
+        self.whisper_cpp_model = None
         self.recording = False
         self.audio_file = AUDIO_FILE
         self.wave_file = None
@@ -202,12 +208,75 @@ class WhisperServer:
 
     def load_whisper_model(self, config: WhisperAttackConfiguration) -> None:
         """
-        Loads the Whisper model.
+        Loads or validates the configured Whisper backend.
+        """
+        whisper_backend = config.get_whisper_backend().strip().lower()
+        if whisper_backend == BACKEND_WHISPER_CPP_VULKAN:
+            self.load_whisper_cpp_vulkan_backend(config)
+            return None
+
+        if whisper_backend != BACKEND_FASTER_WHISPER:
+            logging.warning("Unknown whisper_backend '%s', falling back to faster_whisper", whisper_backend)
+            self.writer.write(
+                f"Unknown whisper_backend '{whisper_backend}', falling back to faster_whisper",
+                TAG_ORANGE
+            )
+
+        self.whisper_backend = BACKEND_FASTER_WHISPER
+        self.load_faster_whisper_model(config)
+        return None
+
+    def resolve_app_path(self, configured_path: str) -> str:
+        """
+        Resolves relative paths from the application directory for both
+        source runs and PyInstaller builds.
+        """
+        configured_path = os.path.expandvars(os.path.expanduser(configured_path))
+        if os.path.isabs(configured_path):
+            return os.path.abspath(configured_path)
+
+        app_location = getattr(self.config, "app_location", os.path.dirname(os.path.abspath(__file__)))
+        return os.path.abspath(os.path.join(app_location, configured_path))
+
+    def load_whisper_cpp_vulkan_backend(self, config: WhisperAttackConfiguration) -> None:
+        """
+        Validates the whisper.cpp Vulkan backend executable and model.
+        """
+        self.whisper_backend = BACKEND_WHISPER_CPP_VULKAN
+        self.whisper_cpp_exe = self.resolve_app_path(config.get_whisper_cpp_exe())
+        self.whisper_cpp_model = self.resolve_app_path(config.get_whisper_cpp_model())
+
+        logging.info("Using whisper.cpp Vulkan backend for AMD GPU")
+        self.writer.write("Using whisper.cpp Vulkan backend for AMD GPU", TAG_BLUE)
+
+        if not os.path.isfile(self.whisper_cpp_exe):
+            message = f"whisper.cpp executable not found: {self.whisper_cpp_exe}"
+            logging.error(message)
+            self.writer.write(message, TAG_RED)
+            raise FileNotFoundError(message)
+
+        if not os.path.isfile(self.whisper_cpp_model):
+            message = f"whisper.cpp model not found: {self.whisper_cpp_model}"
+            logging.error(message)
+            self.writer.write(message, TAG_RED)
+            raise FileNotFoundError(message)
+
+        logging.info("Using whisper.cpp executable: %s", self.whisper_cpp_exe)
+        logging.info("Using whisper.cpp model: %s", self.whisper_cpp_model)
+        logging.info("whisper.cpp Vulkan backend ready")
+        self.writer.write("whisper.cpp Vulkan backend ready", TAG_GREEN)
+        return None
+
+    def load_faster_whisper_model(self, config: WhisperAttackConfiguration) -> None:
+        """
+        Loads the faster-whisper model.
         """
         whisper_model = config.get_whisper_model()
         whisper_device = config.get_whisper_device()
         whisper_compute_type = config.get_whisper_compute_type()
         whisper_core_type = config.get_whisper_core_type()
+        logging.info("Using faster-whisper backend")
+        self.writer.write("Using faster-whisper backend", TAG_BLUE)
         self.writer.write(f"Loading Whisper model ({whisper_model}), device={whisper_device} ...")
         import torch
         from faster_whisper import WhisperModel
@@ -316,30 +385,10 @@ class WhisperServer:
         try:
             logging.info("Transcribing audio...")
             start_time = datetime.now()
-            segments, _ = self.model.transcribe(
-                audio_path,
-                language='en',
-                beam_size=5,
-                suppress_tokens=[0,11,13,30,986],
-                initial_prompt=(
-                    "This is aviation-related speech for DCS Digital Combat Simulator, "
-                    "Expect references to airports in Caucasus Georgia and Russia. Expect callsigns like Enfield, Springfield, Uzi, Colt, Dodge, "
-                    "Ford, Chevy, Pontiac, Army Air, Apache, Crow, Sioux, Gatling, Gunslinger, "
-                    "Hammerhead, Bootleg, Palehorse, Carnivor, Saber, Hawg, Boar, Pig, Tusk, Viper, "
-                    "Venom, Lobo, Cowboy, Python, Rattler, Panther, Wolf, Weasel, Wild, Ninja, Jedi, "
-                    "Hornet, Squid, Ragin, Roman, Sting, Jury, Joker, Ram, Hawk, Devil, Check, Snake, "
-                    "Dude, Thud, Gunny, Trek, Sniper, Sled, Best, Jazz, Rage, Tahoe, Bone, Dark, Vader, "
-                    "Buff, Dump, Kenworth, Heavy, Trash, Cargo, Ascot, Overlord, Magic, Wizard, Focus, "
-                    "Darkstar, Texaco, Arco, Shell, Axeman, Darknight, Warrior, Pointer, Eyeball, "
-                    "Moonbeam, Whiplash, Finger, Pinpoint, Ferret, Shaba, Playboy, Hammer, Jaguar, "
-                    "Deathstar, Anvil, Firefly, Mantis, Badger. Also expect usage of the phonetic "
-                    "alphabet Alpha, Bravo, Charlie, X-ray."
-                )
-            )
-
-            raw_text = ""
-            for segment in segments:
-                raw_text += f"{segment.text}"
+            if self.whisper_backend == BACKEND_WHISPER_CPP_VULKAN:
+                raw_text = self.transcribe_with_whisper_cpp(audio_path)
+            else:
+                raw_text = self.transcribe_with_faster_whisper(audio_path)
 
             end_time = datetime.now()
             duration = end_time - start_time
@@ -364,6 +413,102 @@ class WhisperServer:
             logging.error("Failed to transcribe audio: %s", e)
             self.writer.write(f"Failed to transcribe audio: {e}", TAG_RED)
             return None
+
+    def transcribe_with_faster_whisper(self, audio_path: str) -> str:
+        """
+        Transcribes audio using the loaded faster-whisper model.
+        """
+        segments, _ = self.model.transcribe(
+            audio_path,
+            language='en',
+            beam_size=5,
+            suppress_tokens=[0,11,13,30,986],
+            initial_prompt=(
+                "This is aviation-related speech for DCS Digital Combat Simulator, "
+                "Expect references to airports in Caucasus Georgia and Russia. Expect callsigns like Enfield, Springfield, Uzi, Colt, Dodge, "
+                "Ford, Chevy, Pontiac, Army Air, Apache, Crow, Sioux, Gatling, Gunslinger, "
+                "Hammerhead, Bootleg, Palehorse, Carnivor, Saber, Hawg, Boar, Pig, Tusk, Viper, "
+                "Venom, Lobo, Cowboy, Python, Rattler, Panther, Wolf, Weasel, Wild, Ninja, Jedi, "
+                "Hornet, Squid, Ragin, Roman, Sting, Jury, Joker, Ram, Hawk, Devil, Check, Snake, "
+                "Dude, Thud, Gunny, Trek, Sniper, Sled, Best, Jazz, Rage, Tahoe, Bone, Dark, Vader, "
+                "Buff, Dump, Kenworth, Heavy, Trash, Cargo, Ascot, Overlord, Magic, Wizard, Focus, "
+                "Darkstar, Texaco, Arco, Shell, Axeman, Darknight, Warrior, Pointer, Eyeball, "
+                "Moonbeam, Whiplash, Finger, Pinpoint, Ferret, Shaba, Playboy, Hammer, Jaguar, "
+                "Deathstar, Anvil, Firefly, Mantis, Badger. Also expect usage of the phonetic "
+                "alphabet Alpha, Bravo, Charlie, X-ray."
+            )
+        )
+
+        raw_text = ""
+        for segment in segments:
+            raw_text += f"{segment.text}"
+        return raw_text
+
+    def transcribe_with_whisper_cpp(self, audio_path: str) -> str:
+        """
+        Transcribes audio by running whisper.cpp whisper-cli.exe.
+        """
+        if self.whisper_cpp_exe is None or self.whisper_cpp_model is None:
+            raise RuntimeError("whisper.cpp backend has not been initialized")
+
+        output_base_file = tempfile.NamedTemporaryFile(prefix="whisper_cpp_", delete=False)
+        output_base = output_base_file.name
+        output_base_file.close()
+        output_txt = f"{output_base}.txt"
+
+        try:
+            if os.path.exists(output_base):
+                os.remove(output_base)
+
+            command = [
+                self.whisper_cpp_exe,
+                "-m", self.whisper_cpp_model,
+                "-f", audio_path,
+                "-l", "en",
+                "-otxt",
+                "-of", output_base
+            ]
+            logging.info("Running whisper.cpp command: %s", command)
+            try:
+                startupinfo = None
+                creationflags = 0
+
+                if os.name == "nt":
+                    creationflags = subprocess.CREATE_NO_WINDOW
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = subprocess.SW_HIDE
+
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    cwd=os.path.dirname(self.whisper_cpp_exe),
+                    creationflags=creationflags,
+                    startupinfo=startupinfo
+                )
+            except subprocess.CalledProcessError as error:
+                if error.stdout:
+                    logging.error("whisper.cpp stdout: %s", error.stdout.strip())
+                if error.stderr:
+                    logging.error("whisper.cpp stderr: %s", error.stderr.strip())
+                raise RuntimeError(f"whisper.cpp failed with exit code {error.returncode}") from error
+
+            if result.stdout:
+                logging.info("whisper.cpp stdout: %s", result.stdout.strip())
+            if result.stderr:
+                logging.info("whisper.cpp stderr: %s", result.stderr.strip())
+
+            if not os.path.isfile(output_txt):
+                raise FileNotFoundError(f"whisper.cpp did not create output file: {output_txt}")
+
+            with open(output_txt, 'r', encoding='utf-8') as f:
+                return f.read()
+        finally:
+            for path in (output_base, output_txt):
+                if os.path.exists(path):
+                    os.remove(path)
 
     def send_to_dcs_kneeboard(self, text: str) -> None:
         """

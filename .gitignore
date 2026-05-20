@@ -6,3 +6,14 @@ dist
 build
 
 whisper_server.exe
+# Python cache
+__pycache__/
+*.pyc
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Local whisper.cpp runtime files - publish in GitHub Release ZIP, not in source
+whisper_cpp/

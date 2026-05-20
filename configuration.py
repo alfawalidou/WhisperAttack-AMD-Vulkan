@@ -16,10 +16,11 @@ class WhisperAttackConfiguration:
     """
     A class to read and write the WhisperAttack configuration.
     Default configuration is loaded from the application directory,
-    custom configuration is loaded from the AppData\Local\WhisperAttack
+    custom configuration is loaded from the AppData\\Local\\WhisperAttack
     directory and is combined with the default configuration.
     """
     def __init__(self, app_location: str, app_data_location: str):
+        self.app_location = app_location
         default_config = self.load_configuration(app_location)
         custom_config = self.load_configuration(app_data_location, False)
         self.config = default_config | custom_config
@@ -157,6 +158,27 @@ class WhisperAttackConfiguration:
         Returns the Whisper model to use for speech-to-text
         """
         return self.config.get("whisper_model", "small.en")
+
+    def get_whisper_backend(self) -> str:
+        """
+        Returns the Whisper backend to use for speech-to-text.
+        Defaults to faster_whisper for backward compatibility.
+        """
+        return self.config.get("whisper_backend", "faster_whisper")
+
+    def get_whisper_cpp_exe(self) -> str:
+        """
+        Returns the whisper.cpp CLI executable path.
+        Relative paths are resolved by the Whisper server.
+        """
+        return self.config.get("whisper_cpp_exe", os.path.join("whisper_cpp", "whisper-cli.exe"))
+
+    def get_whisper_cpp_model(self) -> str:
+        """
+        Returns the whisper.cpp model path.
+        Relative paths are resolved by the Whisper server.
+        """
+        return self.config.get("whisper_cpp_model", os.path.join("whisper_cpp", "models", "ggml-base.en.bin"))
 
     def get_whisper_device(self) -> str:
         """
