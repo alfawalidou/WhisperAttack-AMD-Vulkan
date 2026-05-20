@@ -1,41 +1,15 @@
 # WhisperAttack AMD Vulkan Edition
 
-This fork adds an optional whisper.cpp Vulkan backend to WhisperAttack.
+This is an unofficial community AMD/Vulkan build of WhisperAttack.
 
-It is intended for AMD GPU users on Windows who cannot use the original CUDA/NVIDIA GPU backend.
+It uses:
 
-## What changed?
+- whisper.cpp
+- Vulkan
+- AMD-compatible GPU runtime
+- VoiceAttack plugin compatibility
 
-The original VoiceAttack socket protocol is unchanged.
-
-This fork only changes the transcription backend:
-
-- Original backend: faster-whisper / CUDA / CPU
-- Added backend: whisper.cpp / Vulkan
-
-## Tested setup
-
-- Windows 11
-- AMD Radeon RX 6950 XT
-- whisper.cpp Vulkan build
-- Original VoiceAttack plugin compatible
-
-## Configuration
-
-Example settings.cfg:
-
-```ini
-whisper_model=small.en
-whisper_backend=whisper_cpp_vulkan
-whisper_cpp_exe=whisper_cpp\whisper-cli.exe
-whisper_cpp_model=whisper_cpp\models\ggml-base.en.bin
-theme=default
-
-## VoiceAttack plugin compatibility
-
-The original `WhisperAttackServerCommand.dll` remains compatible.
-
-This fork does not change:
+The VoiceAttack plugin remains compatible because the socket protocol is unchanged:
 
 - `127.0.0.1:65432`
 - `127.0.0.1:65433`
@@ -43,9 +17,9 @@ This fork does not change:
 - `stop`
 - `shutdown`
 
-## Runtime files
+## Release Package
 
-The release ZIP should include:
+The release ZIP includes runtime files needed to run transcription:
 
 - `WhisperAttack.exe`
 - `settings.cfg`
@@ -55,22 +29,30 @@ The release ZIP should include:
 - `whisper_cpp\*.dll`
 - `whisper_cpp\models\ggml-base.en.bin`
 
-The Git repository does not include whisper.cpp binaries or models because they are large generated/runtime files.
+The Git repo does not include large binaries or models. Keep `whisper_cpp` out of source control and include those files only in release packages.
 
-## Dependencies
+## Configuration
 
-This AMD/Vulkan release does not require CUDA, PyTorch, faster-whisper, CTranslate2, or NVIDIA runtime libraries.
+```ini
+# WhisperAttack AMD Vulkan configuration
 
-The prebuilt release uses:
+whisper_backend=whisper_cpp_vulkan
+whisper_cpp_exe=whisper_cpp\whisper-cli.exe
+whisper_cpp_model=whisper_cpp\models\ggml-base.en.bin
 
-- whisper.cpp
-- Vulkan
-- AMD-compatible GPU runtime
+theme=default
+```
 
-For reference, the original CUDA/NVIDIA dependency list is kept in:
+If `whisper_backend` is missing, WhisperAttack defaults to `whisper_cpp_vulkan`. If another value is configured, WhisperAttack logs an error and still uses `whisper_cpp_vulkan`.
+
+## Startup Logs
+
+Successful startup shows:
 
 ```text
-requirements-original-cuda.txt
+Using whisper.cpp Vulkan backend for AMD GPU
+whisper.cpp Vulkan backend ready
+Server started and listening on 127.0.0.1:65432
 ```
 
 ## Credits

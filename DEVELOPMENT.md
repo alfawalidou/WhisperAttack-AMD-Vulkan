@@ -1,125 +1,113 @@
-# Building a WhisperAttack Server Executable
+# WhisperAttack AMD Vulkan Development
 
-These instructions document how to build an application executable (exe) version of Whisper Attack. This can be run as a standard application without needing to install Python or any Python packages.
+These notes describe how to run and package the AMD/Vulkan community fork from source.
 
 ## Requirements
 
-- **Python 3.11** (must be in your PATH)
-  - Install from [python.org](https://www.python.org/downloads/release/python-3119), use [this link](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe) for the Windows (64-bit) installer.
-  - NOTE! v3.12 3.13 etc... will NOT work - PyTorch only provides official wheels for Python 3.8 → 3.11
+- Python 3.11 recommended
+- VoiceAttack for end-to-end plugin testing
+- whisper.cpp built with Vulkan support
+- `whisper_cpp\whisper-cli.exe`
+- Required whisper.cpp runtime DLLs in `whisper_cpp`
+- `whisper_cpp\models\ggml-base.en.bin`
 
-![python](https://github.com/user-attachments/assets/1b23945c-2635-40ea-a8b1-51bbfbe2a7b4)
+## Source Layout
 
-## Logging
+The whisper.cpp runtime files are expected beside the Python application:
 
-Because the executable won't be running as a console application the logging needs to go to a file so that it can be viewed. The log file will be written to `C:\Users\username\AppData\Local\WhisperAttack\WhisperAttack.log` file. The log file will be overwritten every time the WhisperAttack server is started.
+```text
+whisper_cpp\
+  whisper-cli.exe
+  *.dll
+  models\
+    ggml-base.en.bin
+```
 
-## Running the WhisperAtack Python app locally
+The repository should not commit `whisper_cpp`, `build`, `dist`, generated spec files, or Python cache files.
 
-WhisperAttack can be run locally without needing to build an executable during development.
+## Run From Source
 
-Install the dependencies using the below command:
+Create and activate a virtual environment:
 
 ```console
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```console
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-**NOTE:** These dependencies should be removed prior to building the executable as per the instructions for starting with a clean environment.
-
-Run WhisperAttack using the below command:
+Run WhisperAttack:
 
 ```console
 python whisper_attack.py
 ```
 
-## Creating the executable file
+Startup is ready when the window and log show:
 
-The commands below will build an executable version of the WhisperAttack server.
-
-### PowerShell
-
-The command prompt will be prefixed with `PS` to show that this is a PowerShell terminal. The commands below are being run from within the directory containing the WhisperAttack source code, in this example it is `D:\src\github\WhisperAttack`.
-
-Allow PowerShell to execute the command to activate the Python virtual environment. The `-Scope Process` means that it is allowed just for this process, e.g. if run from within Visual Studio Code, vs. being set globally which could be a security risk.
-
-```console
-Set-ExecutionPolicy Unrestricted -Scope Process
+```text
+Using whisper.cpp Vulkan backend for AMD GPU
+whisper.cpp Vulkan backend ready
+Server started and listening on 127.0.0.1:65432
 ```
 
-### Starting with a clean environment
+Logs are written to:
 
-When PyInstaller builds the application it will look in your local Python library paths, as well as the paths in the virtual environment
-to locate the packages it needs. To ensure that you have a clean environment you should uninstall any packages in your local cache.
-
-Run the below command to uninstall the packages that will be reinstalled as part of the build. Accept all prompts to remove packages.
-
-```command
-pip uninstall -r requirements.txt
+```text
+C:\Users\username\AppData\Local\WhisperAttack\WhisperAttack.log
 ```
 
-### Building the application
+## VoiceAttack Protocol
 
-Create the Python virtual environment so that dependencies are installed here to keep separate from the global ones.
+The VoiceAttack plugin protocol remains unchanged:
 
-```console
-python -m venv .venv
-```
+- Python listens on `127.0.0.1:65432`
+- VoiceAttack receives recognized text on `127.0.0.1:65433`
+- Commands are `start`, `stop`, and `shutdown`
 
-Activate the virtual environment so you're working in it. Your command prompt will now have a `(.venv)` prefix so that you know it is active.
+## Build The Executable
 
-```console
-.venv\Scripts\Activate.ps1
-```
-
-Install PyInstaller so that it can build the executable. This must be done after activating the virtual environment
-so that it can locate the dependencies in the virtual environment.
+Install PyInstaller in the active virtual environment:
 
 ```console
 pip install pyinstaller
 ```
 
-Install the Python dependencies required by WhisperAttack.
-
-```console
-pip install -r requirements.txt
-```
-
-Run PyInstaller to create an executable of WhisperAttack, this will be created in the `dist\whisper_attack` directory.
-
-The `--noconsole` parameter means that when WhisperAttack is run no window is displayed. A WhisperAttack icon will be displayed in the Windows system tray.
+Build the app:
 
 ```console
 pyinstaller --onedir --noconsole whisper_attack.py
 ```
 
-### Packaging the application
+Copy these files into the generated application folder beside the executable:
 
-Copy the following files into the `dist\whisper_attack` directory as these must be located beside the executable
+- `settings.cfg`
+- `fuzzy_words.txt`
+- `word_mappings.txt`
+- `whisper_attack_icon.png`
+- `add_icon.png`
+- `whisper_cpp\whisper-cli.exe`
+- required `whisper_cpp\*.dll`
+- `whisper_cpp\models\ggml-base.en.bin`
 
-- settings.cfg
-- fuzzy_words.txt
-- word_mappings.txt
-- whisper_attack_icon.png
-- add_icon.png
+Rename the generated executable to `WhisperAttack.exe` for release packaging.
 
-The `whisper_attack` folder, and all its contents (including the `_internal` folder), can be moved to the location of your choice. Rename `whisper_attack.exe` to `WhisperAttack.exe`.
+## Cleanup
 
-The contents of the `whisper_attack` folder can be zipped up if needing to distribute.
-
-### Running the application
-
-Double-click the `WhisperAttack.exe` file to run it. It may take a little while the first time it runs, especially if it is downloading the Whisper model if it was not already installed.
-
-An application window will be opened when it has started up and display logging information information. Full information is also logged to the `C:\Users\username\AppData\Local\WhisperAttack\WhisperAttack.log` file. You may need to close and reopen the log file if your editor does not automatically update when lines are added to the file.
-
-The application can be exited using either by right-clicking the WhisperAttack icon in the system tray, or by closing VoiceAttack.
-
-### Cleaning up after the build
-
-Once you are happy with the executable and do not need to rebuild with any further changes you can run the below command to deactivate the virtual environment and then close the terminal.
+After a build, remove local generated artifacts before preparing source changes:
 
 ```console
-.\.venv\Scripts\deactivate.bat
+deactivate
 ```
 
-Delete the `.venv`, `build`, and `dist` directories.
+Then delete:
+
+- `.venv`
+- `build`
+- `dist`
+- generated `.spec` files
+- `__pycache__`
